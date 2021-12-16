@@ -4,7 +4,7 @@ import "testing"
 
 func TestReduceSum(t *testing.T) {
 	slice := []int{1, 2, 3}
-	adder := func(a, b int) int {return a + b}
+	adder := func(a, b int) int { return a + b }
 	res := Reduce(slice, 0, adder)
 	expect := 6
 
@@ -19,7 +19,7 @@ type user struct {
 
 func TestReduceUserAge(t *testing.T) {
 	slice := []user{{32}, {29}, {42}}
-	adder := func (accum int, val user) int {return accum + val.age}
+	adder := func(accum int, val user) int { return accum + val.age }
 	res := Reduce[user, int](slice, 0, adder)
 	expect := 103
 
