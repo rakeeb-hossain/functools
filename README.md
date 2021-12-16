@@ -1,2 +1,20 @@
 # functools
-Functional tools in Go 1.18 using newly introduced generics
+
+Your favourite functional paradigms without sacrificing type-safety using 
+`interface{}` or `reflect`
+
+Made possible by Go 1.18 using the newly introduced generics.
+
+### Features
+ 
+- Any
+- All
+- Count
+- Filter
+- Map
+- Reduce
+- Sum
+
+### TODO
+
+- LruCache
