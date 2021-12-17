@@ -8,16 +8,16 @@ import (
 )
 
 type user struct {
-	username 	 string
-	age 		 int
+	username     string
+	age          int
 	hasPortfolio bool
 }
 
 type holding struct {
-	ticker 		string
-	boughtTime 	int
-	quantity	float64
-	price		float64
+	ticker     string
+	boughtTime int
+	quantity   float64
+	price      float64
 }
 
 type portfolio struct {
@@ -32,7 +32,7 @@ var (
 
 	usersPortfolioMap = map[string]portfolio{
 		"gopher": {[]holding{{"TSLA", 1639768692, 4.5, 1000}, {"ABNB", 1639163892, 2.5, 200}}},
-		"jack":	  {[]holding{ {"BTC", 1512933492, 5, 1000}, {"ETH", 1639768692, 10, 100}} }}
+		"jack":   {[]holding{{"BTC", 1512933492, 5, 1000}, {"ETH", 1639768692, 10, 100}}}}
 )
 
 func main() {

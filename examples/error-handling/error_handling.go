@@ -14,7 +14,7 @@ import (
 
 type fraction struct {
 	dividend int
-	divisor int
+	divisor  int
 }
 
 func main() {
@@ -25,7 +25,10 @@ func main() {
 	// in case we encounter an error.
 	var err error
 	safeDivide := func(f fraction) *float64 {
-		if f.divisor == 0 { err = errors.New("cannot divide by 0"); return nil }
+		if f.divisor == 0 {
+			err = errors.New("cannot divide by 0")
+			return nil
+		}
 		res := float64(f.dividend) / float64(f.divisor)
 		return &res
 	}
