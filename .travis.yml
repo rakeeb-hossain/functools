@@ -1,4 +1,0 @@
-language: golang
-golang: 1.18.1
-script:
-  - "go test ./functools"
