@@ -60,4 +60,4 @@ For now, documentation is provided via comments and by running `go doc -all` fro
 
 ## Contributing
 
-Please see CONTRIBUTING.md
+Please see [CONTRIBUTING](CONTRIBUTING.md)
