@@ -17,6 +17,7 @@ Made possible by Go 1.18 using the newly introduced generics.
 - Map
 - Reduce
 - Sum
+- Chunk
 
 ## Installation
 
