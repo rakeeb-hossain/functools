@@ -16,6 +16,7 @@ Made possible by Go 1.18 using the newly introduced generics.
 - ForEach
 - Map
 - Reduce
+- ReduceRight
 - Sum
 
 ## Installation
