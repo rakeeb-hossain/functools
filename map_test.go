@@ -19,7 +19,7 @@ func TestAddMap(t *testing.T) {
 func TestUserMap(t *testing.T) {
 	slice := []user{{32}, {29}, {42}}
 	ageTransformer := func(val user) int { return val.age }
-	res := Map[user, int](slice, ageTransformer)
+	res := Map[user, []user, int](slice, ageTransformer)
 	expect := []int{32, 29, 42}
 
 	for i, _ := range res {

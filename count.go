@@ -8,7 +8,7 @@ package functools
 // predicate should be error-safe. It should handle any errors internally and return only a bool.
 // If other arguments are required by predicate, predicate should be made a closure with the appropriate
 // variables referenced.
-func Count[T any](slice []T, predicate func(T) bool) int {
+func Count[T any, A ~[]T](slice A, predicate func(T) bool) int {
 	res := 0
 	for _, v := range slice {
 		if predicate(v) {
