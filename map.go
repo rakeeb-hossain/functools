@@ -14,3 +14,10 @@ func Map[T any, A ~[]T, R any](slice A, mapper func(T) R) []R {
 	}
 	return res
 }
+
+func MapIter[T any, R any](iter Iterator[T], mapper func(T) R) Iterator[R] {
+	return func() (R, bool) {
+		res, ok := Next(iter)
+		return mapper(res), ok
+	}
+}

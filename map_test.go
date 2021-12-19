@@ -16,6 +16,20 @@ func TestAddMap(t *testing.T) {
 	}
 }
 
+func TestAddMapIter(t *testing.T) {
+	slice := Iter([]int{1, 2, 3})
+	adder := func(val int) int { return val + 1 }
+	res := Slice(MapIter(slice, adder))
+	expect := []int{2, 3, 4}
+
+	for i, _ := range res {
+		if i >= len(expect) || res[i] != expect[i] {
+			t.Errorf("TestAddMapIter was incorrect, got: %v, expected: %v", res, expect)
+			return
+		}
+	}
+}
+
 func TestUserMap(t *testing.T) {
 	slice := []user{{32}, {29}, {42}}
 	ageTransformer := func(val user) int { return val.age }
