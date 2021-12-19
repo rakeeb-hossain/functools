@@ -20,7 +20,7 @@ type user struct {
 func TestReduceUserAge(t *testing.T) {
 	slice := []user{{32}, {29}, {42}}
 	adder := func(accum int, val user) int { return accum + val.age }
-	res := Reduce[user, int](slice, 0, adder)
+	res := Reduce[user, []user, int](slice, 0, adder)
 	expect := 103
 
 	if res != expect {

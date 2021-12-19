@@ -10,7 +10,7 @@ package functools
 // reducer should error-safe. It should handle any errors internaly and return
 // the desired type. If other arguments are required by reducer, reducer should
 // be made a closure with the appropriate variables referenced.
-func ReduceRight[T any, R any](slice []T, initial R, reducer func(R, T) R) R {
+func ReduceRight[T any, A ~[]T, R any](slice A, initial R, reducer func(R, T) R) R {
 	accum := initial
 	for i := len(slice) - 1; i >= 0; i-- {
 		accum = reducer(accum, slice[i])

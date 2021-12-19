@@ -12,7 +12,7 @@ type Summable interface {
 // Sum consumes a slice of a Summable type and sums the elements
 //
 // Vacuously, empty slices return the zero value of the provided Summable
-func Sum[S Summable](slice []S) S {
+func Sum[S Summable, A ~[]S](slice A) S {
 	var res S
 	for _, v := range slice {
 		res += v
