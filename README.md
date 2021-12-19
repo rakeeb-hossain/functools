@@ -18,6 +18,7 @@ Made possible by Go 1.18 using the newly introduced generics.
 - Reduce
 - ReduceRight
 - Sum
+- Chunk
 
 ## Installation
 
