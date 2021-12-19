@@ -1,3 +1,5 @@
+// Contains functional methods that rely on arithmetic operations and types
+
 package functools
 
 // Summable encompasses all builtin types with the + operator defined on them or any type aliases
