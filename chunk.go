@@ -7,14 +7,15 @@ import (
 // Chunk consumes a slice of a generic type and
 // returns a slice composed of multiple chunks of a user-specified size
 //
-// Vacuously, empty slices return empty regardless of the chunk size.
+// Vacuously, empty slices return an empty slice of slices regardless of the chunk size.
 //
 // When the chunk size is zero or negative, return an empty slice
 func Chunk[T any](slice []T, size int) [][]T {
-	if size <= 0 {
+	n := len(slice)
+	if size <= 0 || n == 0 {
 		return [][]T{}
 	}
-	n := len(slice)
+
 	if size >= n {
 		tmp := make([]T, n)
 		copy(tmp, slice)
@@ -31,7 +32,6 @@ func Chunk[T any](slice []T, size int) [][]T {
 			tmp := make([]T, n-i)
 			copy(tmp, slice[i:])
 			res = append(res, tmp)
-			break
 		}
 	}
 	return res
