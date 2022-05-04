@@ -24,6 +24,10 @@ func MapIter[T any, R any](iter Iterator[T], mapper func(T) R) Iterator[R] {
 	}
 }
 
+func Map2[A any, B any](fn func(A) B, iter Spliterator[A]) (res Spliterator[B]) {
+	return res
+}
+
 //func ChunkIter[T any](iter Iterator[T], len int) Iterator[[]T] {
 //	return func() (lst []T, b bool) {
 //		res, ok := Next(iter)

@@ -1,116 +1,138 @@
 package functools
 
-type Spliterator[T any] interface {
-	TryAdvance(func(T)) bool
-	ForEachRemaining(func(T))
-	TrySplit() (Spliterator[T], bool)
+import (
+	"golang.org/x/exp/constraints"
+)
+
+type Spliterator[T any] struct {
+	tryAdvance       func(func(T)) bool
+	forEachRemaining func(func(T))
+	trySplit         func() (Spliterator[T], bool)
+	characteristics  uint
 }
 
-type sliceSpliterator[T any] struct {
-	Slice 		 []T
-	SliceLength  int
-	index		 int
-}
-
-func Iter[T any, A ~[]T](slice A) sliceSpliterator[T] {
-	res := sliceSpliterator[T]{}
-	res.Slice = slice
-	res.SliceLength = len(slice)
+func EmptyIter[T any]() (res Spliterator[T]) {
+	res.tryAdvance = func(func(T)) bool {
+		return false
+	}
+	res.forEachRemaining = func(func(T)) {}
+	res.trySplit = func() (r Spliterator[T], b bool) {
+		return r, b
+	}
 	return res
 }
 
-func (ss sliceSpliterator[T]) TryAdvance(fn func(T)) bool {
-	if ss.index >= ss.SliceLength {
-		return false // b is false here
+func sliceIterRec[T any, A ~[]T](slice A, lo int, hi int) (res Spliterator[T]) {
+	res.tryAdvance = func(fn func(T)) bool {
+		if lo >= hi {
+			return false
+		}
+		fn(slice[lo])
+		lo++
+		return true
 	}
-	ss.index++
-	fn(ss.Slice[ss.index-1])
-	return true
-}
 
-func (ss sliceSpliterator[T]) ForEachRemaining(fn func(T)) {
-	for ; ss.index < ss.SliceLength ; ss.index++ {
-		fn(ss.Slice[ss.index])
+	res.forEachRemaining = func(fn func(T)) {
+		for ; lo < hi; lo++ {
+			fn(slice[lo])
+		}
 	}
-}
 
-func (ss *sliceSpliterator[T]) TrySplit() (res sliceSpliterator[T], b bool) {
-	if ss.SliceLength <= 1 {
-		return res, b
+	res.trySplit = func() (s Spliterator[T], b bool) {
+		mid := (hi-lo)/2 + lo
+		if mid != lo {
+			s, b = sliceIterRec[T, A](slice, mid, hi), true
+			// Modify current sliceIter before returning
+			hi = mid
+		}
+		return s, b
 	}
-	updatedLen := ss.SliceLength / 2
-	res.SliceLength = ss.SliceLength - updatedLen
-	res.Slice = ss.Slice[updatedLen:]
-	ss.SliceLength = updatedLen
-
-	return res, true
+	return res
 }
 
-
-
-type ruleSpliterator[T any] struct {
-	Rule 	func() (T, bool)
+func SliceIter[T any, A ~[]T](slice A) (res Spliterator[T]) {
+	sliceIterRec[T, A](slice, 0, len(slice))
+	return res
 }
 
-func RuleIter[T any](rule func() (T, bool)) ruleSpliterator[T] {
-	return ruleSpliterator[T]{Rule: rule}
-}
-
-func (rs ruleSpliterator[T]) TryAdvance(fn func(T)) bool {
-	res, ok := rs.Rule()
-	if ok {
-		fn(res)
+func RuleIter[T any, A ~func() (T, bool)](rule A) (res Spliterator[T]) {
+	res.tryAdvance = func(fn func(T)) bool {
+		r, b := rule()
+		if b {
+			fn(r)
+		}
+		return b
 	}
-	return ok
-}
-
-func (rs ruleSpliterator[T]) ForEachRemaining(fn func(T)) {
-	for res, ok := rs.Rule(); ok; res, ok = rs.Rule() {
-		fn(res)
+	res.forEachRemaining = func(fn func(T)) {
+		for r, b := rule(); b; r, b = rule() {
+			fn(r)
+		}
 	}
-}
-
-func (rs ruleSpliterator[T]) TrySplit() (res ruleSpliterator[T], b bool) {
-	return res, b
-}
-
-
-
-type intRangeSpliterator struct {
-	low int
-	high int
-}
-
-func RangeIter(low, high int) intRangeSpliterator {
-	return intRangeSpliterator{low: low, high: high}
-}
-
-func (is intRangeSpliterator) TryAdvance(fn func(int)) bool {
-	if is.low >= is.high {
-		return false
+	res.trySplit = func() (s Spliterator[T], b bool) {
+		return s, b
 	}
-	is.low++
-	fn(is.low-1)
-	return true
+	return res
 }
 
-func (is intRangeSpliterator) ForEachRemaining(fn func(int)) {
-	for ; is.low < is.high; is.low++ {
-		fn(is.low)
+func sign[T constraints.Integer](x T) int8 {
+	if x > 0 {
+		return 1
+	} else if x < 0 {
+		return -1
+	} else {
+		return 0
 	}
 }
 
-func (is *intRangeSpliterator) TrySplit() (res intRangeSpliterator, b bool) {
-	if is.high - is.low <= 1 {
-		return res, b
+func RangeIter[T constraints.Integer](start, stop T, step T) (res Spliterator[T]) {
+	// Check to ensure no infinite-loop
+	if sign(stop-start)*sign(step) < 0 {
+		return EmptyIter[T]()
 	}
-	avg := (is.low + is.high)/2
-	is.high = avg
-	res.low = avg
-	return res, true
+
+	res.tryAdvance = func(fn func(T)) bool {
+		if start >= stop {
+			return false
+		}
+		fn(start)
+		start += step
+		return true
+	}
+	res.forEachRemaining = func(fn func(T)) {
+		for ; start < stop; start += step {
+			fn(start)
+		}
+	}
+	res.trySplit = func() (s Spliterator[T], b bool) {
+		mid := (stop-start)/2 + start
+		if mid != start {
+			s, b = RangeIter[T](mid, stop, step), true
+			// Modify stop for this iter
+			stop = mid
+		}
+		return s, b
+	}
+	return res
 }
 
-
+func ChanIter[T any, C ~chan T](ch C) (res Spliterator[T]) {
+	res.tryAdvance = func(fn func(T)) bool {
+		v, ok := <-ch
+		if ok {
+			fn(v)
+		}
+		return ok
+	}
+	res.forEachRemaining = func(fn func(T)) {
+		for elem := range ch {
+			fn(elem)
+		}
+	}
+	res.trySplit = func() (s Spliterator[T], b bool) {
+		return s, b
+	}
+	return res
+}
 
 // Iterator is a generic iterator on a slice that lazily evaluates the next element in the slice.
 // This is used to lazily evaluate a slice's next value, allowing several applications of functional
