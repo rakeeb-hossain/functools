@@ -4,18 +4,25 @@ import (
 	"golang.org/x/exp/constraints"
 )
 
+const (
+	DISTINCT = 1 << iota
+	SORTED
+	SIZED
+	SPLITTABLE
+)
+
 type Spliterator[T any] struct {
-	tryAdvance       func(func(T)) bool
-	forEachRemaining func(func(T))
-	trySplit         func() (Spliterator[T], bool)
-	characteristics  uint
+	tryAdvance      func(func(T)) bool
+	forNextK        func(int, func(T))
+	trySplit        func() (Spliterator[T], bool)
+	characteristics uint
 }
 
 func EmptyIter[T any]() (res Spliterator[T]) {
 	res.tryAdvance = func(func(T)) bool {
 		return false
 	}
-	res.forEachRemaining = func(func(T)) {}
+	res.forNextK = func(int, func(T)) {}
 	res.trySplit = func() (r Spliterator[T], b bool) {
 		return r, b
 	}
@@ -32,7 +39,7 @@ func sliceIterRec[T any, A ~[]T](slice A, lo int, hi int) (res Spliterator[T]) {
 		return true
 	}
 
-	res.forEachRemaining = func(fn func(T)) {
+	res.forNextK = func(k int, fn func(T)) {
 		for ; lo < hi; lo++ {
 			fn(slice[lo])
 		}
@@ -63,7 +70,7 @@ func RuleIter[T any, A ~func() (T, bool)](rule A) (res Spliterator[T]) {
 		}
 		return b
 	}
-	res.forEachRemaining = func(fn func(T)) {
+	res.forNextK = func(fn func(T)) {
 		for r, b := rule(); b; r, b = rule() {
 			fn(r)
 		}
@@ -98,7 +105,7 @@ func RangeIter[T constraints.Integer](start, stop T, step T) (res Spliterator[T]
 		start += step
 		return true
 	}
-	res.forEachRemaining = func(fn func(T)) {
+	res.forNextK = func(fn func(T)) {
 		for ; start < stop; start += step {
 			fn(start)
 		}
@@ -123,7 +130,7 @@ func ChanIter[T any, C ~chan T](ch C) (res Spliterator[T]) {
 		}
 		return ok
 	}
-	res.forEachRemaining = func(fn func(T)) {
+	res.forNextK = func(fn func(T)) {
 		for elem := range ch {
 			fn(elem)
 		}

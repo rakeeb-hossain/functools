@@ -8,24 +8,29 @@ package functools
 // mapper should be error-safe. It should handle any errors internally and return the desired type.
 // If other arguments are required by mapper, mapper should be made a closure with the appropriate
 // variables referenced.
-func Map[T any, A ~[]T, R any](slice A, mapper func(T) R) []R {
-	res := make([]R, len(slice))
-
-	for i, v := range slice {
-		res[i] = mapper(v)
+func Map[A any, B any](mapper func(A) B, iter Spliterator[A]) (res Spliterator[B]) {
+	res.tryAdvance = func(fn func(B)) bool {
+		_mapper := func(a A) {
+			fn(mapper(a))
+		}
+		return iter.tryAdvance(_mapper)
 	}
-	return res
+	res.forNextK = func(k int, fn func(B)) {
+		_mapper := func(a A) {
+			fn(mapper(a))
+		}
+		iter.forNextK(k, _mapper)
+	}
+	res.trySplit = iter.trySplit
 }
 
-func MapIter[T any, R any](iter Iterator[T], mapper func(T) R) Iterator[R] {
-	return func() (R, bool) {
-		res, ok := Next(iter)
-		return mapper(res), ok
-	}
-}
+// Stateful op
 
-func Map2[A any, B any](fn func(A) B, iter Spliterator[A]) (res Spliterator[B]) {
-	return res
+func Sorted[T any](iter Spliterator[T]) (res Spliterator[T]) {
+	_buffer := make([]T, 1)
+	res.tryAdvance = func(fn func(T)) bool {
+
+	}
 }
 
 //func ChunkIter[T any](iter Iterator[T], len int) Iterator[[]T] {
@@ -85,19 +90,11 @@ func FilterIter[T any](iter Iterator[T], predicate func(T) bool) Iterator[T] {
 // reducer should be error-safe. It should handle any errors internally and return the desired type.
 // If other arguments are required by reducer, reducer should be made a closure with the appropriate
 // variables referenced.
-func Reduce[T any, A ~[]T, R any](slice A, initial R, reducer func(R, T) R) R {
+func Reduce[T any, R any](iter Spliterator[T], initial R, reducer func(R, T) R) R {
 	accum := initial
-	for _, v := range slice {
+	iter.forNextK(-1, func(v T) {
 		accum = reducer(accum, v)
-	}
-	return accum
-}
-
-func ReduceIter[T any, R any](iter Iterator[T], initial R, reducer func(R, T) R) R {
-	accum := initial
-	for val, ok := Next(iter); ok; val, ok = Next(iter) {
-		accum = reducer(accum, val)
-	}
+	})
 	return accum
 }
 
