@@ -2,10 +2,16 @@ package functools
 
 import (
 	"fmt"
+	"unsafe"
 )
 
-var FirstBuffPower int = 4
-var MinSpineSize int = 2 // must be >= 1
+const FirstBuffPower int = 4
+const MinSpineSize int = 2 // must be >= 1
+const SpineExtendCount int = 1
+
+type ArrWrapper[T any] struct {
+	array unsafe.Pointer
+}
 
 // SpinedBuffer is an optimization on a regular slice that doesn't require copying elements on re-sizing.
 // This has good performance in cases where an unknown size stream is being processed, since copying from
@@ -22,6 +28,7 @@ type SpinedBuffer[T any] struct {
 	flatIdx           int
 	sizePower         int
 	capacity          int
+	inflated          bool
 }
 
 // Checks if copy is required and copies currBuff to spines
@@ -42,6 +49,7 @@ func (s *SpinedBuffer[T]) inflateSpine() {
 			s.capacity += 1 << s.sizePower
 		}
 	}
+	s.inflated = true
 }
 
 func CreateSpinedBuffer[T any]() (s SpinedBuffer[T]) {
@@ -71,18 +79,23 @@ func (s *SpinedBuffer[T]) Push(elem T) {
 		s.currBuff[s.flatIdx] = elem
 		s.flatIdx++
 	} else {
-		s.inflateSpine()
-		if len(s.spines[s.spineIdx]) == cap(s.spines[s.spineIdx]) {
+		if !s.inflated {
+			s.inflateSpine()
+		}
+		// Check if len == cap
+		if len(s.spines[s.spineIdx]) == (1 << (s.spineIdx + FirstBuffPower)) {
 			// Check if we need to extend capacity
 			if s.flatIdx == s.capacity {
 				// Allocate new array into spines, update capacity, and increment spineIdx
-				s.sizePower++
-				newBuff := make([]T, 0, 1<<s.sizePower)
-				s.capacity += 1 << s.sizePower
+				for i := 0; i < SpineExtendCount; i++ {
+					s.sizePower++
+					newBuff := make([]T, 0, 1<<s.sizePower)
+					s.capacity += 1 << s.sizePower
 
-				// NOTE: this is where the main optimization happens; only need to copy over existing slice
-				// pointers, NOT their respective entries
-				s.spines = append(s.spines, newBuff)
+					// NOTE: this is where the main optimization happens; only need to copy over existing slice
+					// pointers, NOT their respective entries
+					s.spines = append(s.spines, newBuff)
+				}
 			}
 			s.spineIdx++
 
@@ -110,7 +123,6 @@ func (s SpinedBuffer[T]) Flatten() []T {
 	for i := 0; i <= s.spineIdx; i++ {
 		j := 0
 		for ; currIdx < s.sizeOfPrevBuffers[i]; currIdx++ {
-			//fmt.Printf("%d %d %v\n", i, j, s.spines[i][j])
 			res[currIdx] = s.spines[i][j]
 			j++
 		}

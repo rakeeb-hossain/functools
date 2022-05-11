@@ -38,3 +38,29 @@ func TestSpinedBuffer_At(t *testing.T) {
 		}
 	}
 }
+
+const BENCHMARK_SIZE int = 10000
+
+func BenchmarkCreateSpinedBuffer_Push(b *testing.B) {
+	buff := CreateSpinedBuffer[int]()
+
+	for i := 0; i < BENCHMARK_SIZE; i++ {
+		buff.Push(i)
+	}
+}
+
+func BenchmarkSlicePush(b *testing.B) {
+	slice := make([]int, 0)
+
+	for i := 0; i < BENCHMARK_SIZE; i++ {
+		slice = append(slice, i)
+	}
+}
+
+//func BenchmarkArrayPush(b *testing.B) {
+//	arr := [BENCHMARK_SIZE]int{}
+//
+//	for i := 0; i < BENCHMARK_SIZE; i++ {
+//		arr[i] = i
+//	}
+//}
