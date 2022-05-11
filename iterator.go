@@ -70,11 +70,11 @@ func RuleIter[T any, A ~func() (T, bool)](rule A) (res Spliterator[T]) {
 		}
 		return b
 	}
-	res.forNextK = func(fn func(T)) {
-		for r, b := rule(); b; r, b = rule() {
-			fn(r)
-		}
-	}
+	//res.forNextK = func(fn func(T)) {
+	//	for r, b := rule(); b; r, b = rule() {
+	//		fn(r)
+	//	}
+	//}
 	res.trySplit = func() (s Spliterator[T], b bool) {
 		return s, b
 	}
@@ -105,11 +105,11 @@ func RangeIter[T constraints.Integer](start, stop T, step T) (res Spliterator[T]
 		start += step
 		return true
 	}
-	res.forNextK = func(fn func(T)) {
-		for ; start < stop; start += step {
-			fn(start)
-		}
-	}
+	//res.forNextK = func(fn func(T)) {
+	//	for ; start < stop; start += step {
+	//		fn(start)
+	//	}
+	//}
 	res.trySplit = func() (s Spliterator[T], b bool) {
 		mid := (stop-start)/2 + start
 		if mid != start {
@@ -130,11 +130,11 @@ func ChanIter[T any, C ~chan T](ch C) (res Spliterator[T]) {
 		}
 		return ok
 	}
-	res.forNextK = func(fn func(T)) {
-		for elem := range ch {
-			fn(elem)
-		}
-	}
+	//res.forNextK = func(fn func(T)) {
+	//	for elem := range ch {
+	//		fn(elem)
+	//	}
+	//}
 	res.trySplit = func() (s Spliterator[T], b bool) {
 		return s, b
 	}

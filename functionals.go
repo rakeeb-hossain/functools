@@ -21,16 +21,15 @@ func Map[A any, B any](mapper func(A) B, iter Spliterator[A]) (res Spliterator[B
 		}
 		iter.forNextK(k, _mapper)
 	}
-	res.trySplit = iter.trySplit
+	// res.trySplit = iter.trySplit
+
+	return res
 }
 
 // Stateful op
 
 func Sorted[T any](iter Spliterator[T]) (res Spliterator[T]) {
-	_buffer := make([]T, 1)
-	res.tryAdvance = func(fn func(T)) bool {
-
-	}
+	return res
 }
 
 //func ChunkIter[T any](iter Iterator[T], len int) Iterator[[]T] {

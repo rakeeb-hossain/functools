@@ -1,8 +1,15 @@
 package functools
 
-var FirstBuffPower int = 4
-var MinSpineSize int = 2
+import (
+	"fmt"
+)
 
+var FirstBuffPower int = 4
+var MinSpineSize int = 2 // must be >= 1
+
+// SpinedBuffer is an optimization on a regular slice that doesn't require copying elements on re-sizing.
+// This has good performance in cases where an unknown size stream is being processed, since copying from
+// re-sizing is minimized.
 type SpinedBuffer[T any] struct {
 	// Spine data structures
 	// We optimistically assume everything will fit into currBuff in most cases
@@ -10,28 +17,28 @@ type SpinedBuffer[T any] struct {
 	spines   [][]T
 
 	// Spine state management
+	sizeOfPrevBuffers []int
 	spineIdx          int
 	flatIdx           int
 	sizePower         int
 	capacity          int
-	sizeOfPrevBuffers int
 }
 
 // Checks if copy is required and copies currBuff to spines
 func (s *SpinedBuffer[T]) inflateSpine() {
-	if s.spineIdx == 0 && len(s.currBuff) == s.capacity {
+	if s.spineIdx == 0 && s.flatIdx == s.capacity {
 		// Create spines
 		s.spines = make([][]T, MinSpineSize)
 
 		// Assign currBuff to first spine and set sizeOfPrevBuffers
-		s.spines[0] = s.currBuff
-		s.spineIdx++
-		s.sizeOfPrevBuffers = s.capacity
+		s.spines[0] = s.currBuff[:] // should be O(1) since just copying slice
+		s.sizeOfPrevBuffers = make([]int, 1, MinSpineSize)
+		s.sizeOfPrevBuffers[0] = s.flatIdx
 
 		// Update subsequent spines
 		for i := 1; i < MinSpineSize; i++ {
 			s.sizePower++
-			s.spines[i] = make([]T, 1<<s.sizePower)
+			s.spines[i] = make([]T, 0, 1<<s.sizePower)
 			s.capacity += 1 << s.sizePower
 		}
 	}
@@ -45,6 +52,9 @@ func CreateSpinedBuffer[T any]() (s SpinedBuffer[T]) {
 
 	s.currBuff = make([]T, s.capacity)
 	s.spines = nil
+	s.sizeOfPrevBuffers = nil
+
+	return s
 }
 
 func (s SpinedBuffer[T]) Len() int {
@@ -55,50 +65,103 @@ func (s SpinedBuffer[T]) Capacity() int {
 	return s.capacity
 }
 
-func (s *SpinedBuffer[T]) Append(elem T) {
+func (s *SpinedBuffer[T]) Push(elem T) {
 	if s.flatIdx < cap(s.currBuff) {
 		// Assign elem to currBuff
 		s.currBuff[s.flatIdx] = elem
 		s.flatIdx++
 	} else {
 		s.inflateSpine()
-		if s.flatIdx == s.capacity {
-			// Need to extend capacity
+		if len(s.spines[s.spineIdx]) == cap(s.spines[s.spineIdx]) {
+			// Check if we need to extend capacity
+			if s.flatIdx == s.capacity {
+				// Allocate new array into spines, update capacity, and increment spineIdx
+				s.sizePower++
+				newBuff := make([]T, 0, 1<<s.sizePower)
+				s.capacity += 1 << s.sizePower
 
-			// Allocate new array into spines, update capacity, and increment spineIdx
-			s.sizePower++
-			newBuff := make([]T, 1<<s.sizePower)
-			s.capacity += 1 << s.sizePower
-			// NOTE: this is where the main optimization happens; only need to copy over existing slice
-			// pointers, NOT their respective entries
-			s.spines = append(s.spines, newBuff)
+				// NOTE: this is where the main optimization happens; only need to copy over existing slice
+				// pointers, NOT their respective entries
+				s.spines = append(s.spines, newBuff)
+			}
 			s.spineIdx++
 
 			// Assign value to new spine
-			s.spines[s.spineIdx][0] = elem
+			s.spines[s.spineIdx] = append(s.spines[s.spineIdx], elem)
 			s.flatIdx++
-		} else {
-			// Calculate offset to add elem
-			offset := s.flatIdx - s.sizeOfPrevBuffers
-			s.spines[s.spineIdx][offset] = elem
 
+			// Create new sizeOfPrevBuffers entry
+			s.sizeOfPrevBuffers = append(s.sizeOfPrevBuffers, 0)
+		} else {
+			s.spines[s.spineIdx] = append(s.spines[s.spineIdx], elem)
 			s.flatIdx++
 		}
+		s.sizeOfPrevBuffers[len(s.sizeOfPrevBuffers)-1] = s.flatIdx
 	}
 }
 
 func (s SpinedBuffer[T]) Flatten() []T {
 	if s.spineIdx == 0 {
-		return s.currBuff
+		return s.currBuff[:s.flatIdx]
 	}
 
 	res := make([]T, s.flatIdx)
 	currIdx := 0
-	for i := 0; i < s.spineIdx; i++ {
-		for j := 0; j < len(s.spines[i]); j++ {
+	for i := 0; i <= s.spineIdx; i++ {
+		j := 0
+		for ; currIdx < s.sizeOfPrevBuffers[i]; currIdx++ {
+			//fmt.Printf("%d %d %v\n", i, j, s.spines[i][j])
 			res[currIdx] = s.spines[i][j]
+			j++
 		}
 	}
 
 	return res
+}
+
+func (s SpinedBuffer[T]) At(index int) (res T) {
+	if index < s.flatIdx && index >= 0 {
+		if s.spineIdx == 0 {
+			res = s.currBuff[index]
+		} else {
+			// binary-search for upper-bound; gives index of first elem in sizeOfPrevBuffers that is >= index
+			// this index is guaranteed to be valid since sizeOfPrevBuffers last elem is s.flatIdx and index < s.flatIdx
+			spineSizeIdx := upperBoundGuaranteed(index, s.sizeOfPrevBuffers)
+
+			// Equality-case where index actually belongs to next spine
+			if s.sizeOfPrevBuffers[spineSizeIdx] == index {
+				res = s.spines[spineSizeIdx+1][0]
+			} else {
+				offset := index // case where index belongs to first spine so spineSizeIdx == 0
+				if spineSizeIdx > 0 {
+					offset = index - s.sizeOfPrevBuffers[spineSizeIdx-1]
+				}
+				res = s.spines[spineSizeIdx][offset]
+			}
+
+		}
+	}
+	return res
+}
+
+func (s SpinedBuffer[T]) PrintStats() {
+	fmt.Printf("spineIdx: %d\n", s.spineIdx)
+	fmt.Printf("flatIdx: %d\n", s.flatIdx)
+	fmt.Printf("capacity: %d\n", s.capacity)
+	fmt.Printf("sizePower: %d\n", s.sizePower)
+}
+
+func upperBoundGuaranteed(val int, arr []int) int {
+	lo := 0
+	hi := len(arr)
+	for lo < hi {
+		mid := (hi-lo)/2 + lo
+
+		if arr[mid] >= val {
+			hi = mid
+		} else {
+			lo = mid + 1
+		}
+	}
+	return lo
 }
