@@ -11,11 +11,11 @@ const (
 type StreamStage[T any] interface {
 	spliterator() Spliterator[T]
 
-	getParallelism() int
 	isStateful() bool
-	// characteristics() uint32
+	getParallelism() int
+	characteristics() uint
 
-	opEvalParallelLazy()
+	opEvalParallelLazy(int)
 }
 
 // StatelessOp struct embedding
@@ -27,13 +27,19 @@ func (s InheritUpstream[T]) getParallelism() int {
 	return (*s.upstream).getParallelism()
 }
 
+func (s InheritUpstream[T]) characteristics() uint {
+	return (*s.upstream).characteristics()
+}
+
+func (s InheritUpstream[T]) opEvalParallelLazy(n int) {
+	(*s.upstream).opEvalParallelLazy(n)
+}
+
 type StatelessOp struct{}
 
 func (s StatelessOp) isStateful() bool {
 	return false
 }
-
-func (s StatelessOp) opEvalParallelLazy() {}
 
 // SourceStage definition
 type SourceStage[T any] struct {
@@ -56,6 +62,14 @@ func (s SourceStage[T]) spliterator() Spliterator[T] {
 
 func (s SourceStage[T]) getParallelism() int {
 	return s.parallelism
+}
+
+func (s SourceStage[T]) characteristics() uint {
+	return s.src.characteristics
+}
+
+func (s SourceStage[T]) opEvalParallelLazy(n int) {
+
 }
 
 // All this stuff should probably go into a separate file
@@ -145,25 +159,28 @@ func quicksort[T any](cmp func(T, T) bool, slice []T) {
 	}
 }
 
-func (m SortOp[T]) spliterator() (res Spliterator[T]) {
-	s := (*m.upstream).spliterator()
+func (m SortOp[T]) spliteratorRec(src Spliterator[T]) (res Spliterator[T]) {
 	done := false
 	buffer := make([]T, 0, 2)
-
+	index := 0
 	res.tryAdvance = func(fn func(T)) bool {
 		if !done {
-			s.forEachRemaining(func(e T) {
+			src.forEachRemaining(func(e T) {
 				buffer = append(buffer, e)
 			})
 			quicksort(m.cmp, buffer)
 			done = true
 		}
-		fn(buffer[0])
+		if index >= len(buffer) {
+			return false
+		}
+		fn(buffer[index])
+		index++
 		return true
 	}
 	res.forEachRemaining = func(fn func(T)) {
 		if !done {
-			s.forEachRemaining(func(e T) {
+			src.forEachRemaining(func(e T) {
 				buffer = append(buffer, e)
 			})
 			quicksort(m.cmp, buffer)
@@ -173,30 +190,29 @@ func (m SortOp[T]) spliterator() (res Spliterator[T]) {
 			fn(x)
 		}
 	}
-	res.trySplit = s.trySplit
+	res.trySplit = func() (Spliterator[T], bool) {
+		r, b := src.trySplit()
+		if !b {
+			return r, b
+		}
+		return m.spliteratorRec(r), b
+	}
 	return res
+}
+
+func (m SortOp[T]) spliterator() (res Spliterator[T]) {
+	s := (*m.upstream).spliterator()
+	return m.spliteratorRec(s)
 }
 
 func (s SortOp[T]) isStateful() bool {
 	return true
 }
 
-func (s SortOp[T]) opEvalParallelLazy() {
-
+func (s SortOp[T]) characteristics() uint {
+	return (*s.upstream).characteristics() | SIZED | SORTED | ORDERED
 }
 
-// Terminal ops
-func ForEach[T any](fn func(T), stream StreamStage[T]) {
-	n := stream.getParallelism()
-	if n <= 1 {
-		stream.spliterator().forEachRemaining(fn)
-	} else {
-		// FILL IN
-	}
-}
-
-func test() {
-	slice := make([]int, 5)
-	s := Stream(SliceIter(slice))
-	ForEach(func(n int) { print(n) }, s)
+func (s SortOp[T]) opEvalParallelLazy(n int) {
+	(*s.upstream).opEvalParallelLazy(n)
 }
