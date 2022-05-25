@@ -4,25 +4,18 @@ import (
 	"golang.org/x/exp/constraints"
 )
 
-const (
-	DISTINCT = 1 << iota
-	SORTED
-	SIZED
-	SPLITTABLE
-)
-
 type Spliterator[T any] struct {
-	tryAdvance      func(func(T)) bool
-	forNextK        func(int, func(T))
-	trySplit        func() (Spliterator[T], bool)
-	characteristics uint
+	tryAdvance       func(func(T)) bool
+	forEachRemaining func(func(T))
+	trySplit         func() (Spliterator[T], bool)
+	characteristics  uint
 }
 
 func EmptyIter[T any]() (res Spliterator[T]) {
 	res.tryAdvance = func(func(T)) bool {
 		return false
 	}
-	res.forNextK = func(int, func(T)) {}
+	res.forEachRemaining = func(func(T)) {}
 	res.trySplit = func() (r Spliterator[T], b bool) {
 		return r, b
 	}
@@ -39,7 +32,7 @@ func sliceIterRec[T any, A ~[]T](slice A, lo int, hi int) (res Spliterator[T]) {
 		return true
 	}
 
-	res.forNextK = func(k int, fn func(T)) {
+	res.forEachRemaining = func(fn func(T)) {
 		for ; lo < hi; lo++ {
 			fn(slice[lo])
 		}
@@ -58,8 +51,7 @@ func sliceIterRec[T any, A ~[]T](slice A, lo int, hi int) (res Spliterator[T]) {
 }
 
 func SliceIter[T any, A ~[]T](slice A) (res Spliterator[T]) {
-	sliceIterRec[T, A](slice, 0, len(slice))
-	return res
+	return sliceIterRec[T, A](slice, 0, len(slice))
 }
 
 func RuleIter[T any, A ~func() (T, bool)](rule A) (res Spliterator[T]) {

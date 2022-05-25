@@ -8,6 +8,14 @@ const FirstBuffPower int = 4
 const MinSpineSize int = 2 // must be >= 1
 const SpineExtendCount int = 1
 
+type AbstractBuffer[T any] interface {
+	Push(T)
+	At(int)
+	Flatten()
+	Len() int
+	Capacity() int
+}
+
 // SpinedBuffer is an optimization on a regular slice that doesn't require copying elements on re-sizing.
 // This has good performance in cases where an unknown size stream is being processed, since copying from
 // re-sizing is minimized.
