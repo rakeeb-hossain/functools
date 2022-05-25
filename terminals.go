@@ -36,6 +36,7 @@ func buildNSplits[T any](n uint32, src Spliterator[T]) []Spliterator[T] {
 }
 
 // ForEach
+// TODO: figure out if you can abstract most of this. opEvalParallelLazy, buildNSplits, etc. always happen so we might be able to make ForEachOp implement a TerminalOp interface and abstract these
 func ForEach[T any](fn func(T), stream StreamStage[T]) {
 	n := stream.getParallelism()
 	if n <= 1 {
@@ -52,8 +53,6 @@ func ForEach[T any](fn func(T), stream StreamStage[T]) {
 		var wg sync.WaitGroup
 
 		for i := 0; i < n; i++ {
-			splits[i].forEachRemaining(fn)
-
 			wg.Add(1)
 
 			go func(i int) {
@@ -65,6 +64,116 @@ func ForEach[T any](fn func(T), stream StreamStage[T]) {
 		wg.Wait()
 	}
 }
+
+// Summable encompasses all builtin types with the + operator defined on them or any type aliases
+// of these types
+type Summable interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 |
+		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr |
+		~float32 | ~float64 |
+		~string
+}
+
+// Sum
+func Sum[T Summable](stream StreamStage[T]) T {
+	n := stream.getParallelism()
+	if n <= 1 {
+		var res T
+		stream.spliterator().forEachRemaining(func(e T) {
+			res += e
+		})
+		return res
+	} else {
+		// Evaluate up to last stateful op
+		stream.opEvalParallelLazy(n)
+
+		// Get n splits
+		splits := buildNSplits(uint32(n), stream.spliterator())
+		n = len(splits)
+
+		var wg sync.WaitGroup
+		var mutex sync.Mutex
+		var res T
+
+		for i := 0; i < n; i++ {
+			wg.Add(1)
+
+			go func(i int) {
+				defer wg.Done()
+
+				var tmp T
+				splits[i].forEachRemaining(func(e T) {
+					tmp += e
+				})
+				mutex.Lock()
+				res += tmp
+				mutex.Unlock()
+			}(i)
+		}
+		wg.Wait()
+
+		return res
+	}
+}
+
+// Any
+func Any[T any](pred func(T) bool, stream StreamStage[T]) bool {
+	n := stream.getParallelism()
+	res := false
+
+	if n <= 1 {
+		wrapPred := func(e T) {
+			if pred(e) {
+				res = true
+			}
+		}
+		s := stream.spliterator()
+		for ok := s.tryAdvance(wrapPred); ok && !res; ok = s.tryAdvance(wrapPred) {
+		}
+		return res
+	} else {
+		// Evaluate up to last stateful op
+		stream.opEvalParallelLazy(n)
+
+		// Get n splits
+		splits := buildNSplits(uint32(n), stream.spliterator())
+		n = len(splits)
+
+		var wg sync.WaitGroup
+		var mutex sync.Mutex
+
+		for i := 0; i < n; i++ {
+			wg.Add(1)
+
+			go func(i int) {
+				defer wg.Done()
+
+				tmp := false
+				wrapPred := func(e T) {
+					if pred(e) {
+						tmp = true
+					}
+				}
+
+				for ok := splits[i].tryAdvance(wrapPred); ok && !tmp && !res; ok = splits[i].tryAdvance(wrapPred) {
+				}
+
+				if tmp {
+					mutex.Lock()
+					res = tmp
+					mutex.Unlock()
+				}
+			}(i)
+		}
+		wg.Wait()
+
+		return res
+	}
+}
+
+// CollectSlice
+
+// Reduce
 
 //// All consumes a slice of a generic type and applies the predicate to each element in the slice.
 //// All return true if and only if no element returns false after applying the predicate.
@@ -100,14 +209,6 @@ func ForEach[T any](fn func(T), stream StreamStage[T]) {
 //	return false
 //}
 //
-//// Summable encompasses all builtin types with the + operator defined on them or any type aliases
-//// of these types
-//type Summable interface {
-//	~int | ~int8 | ~int16 | ~int32 | ~int64 |
-//		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr |
-//		~float32 | ~float64 |
-//		~string
-//}
 //
 //// Sum consumes a slice of a Summable type and sums the elements
 ////
